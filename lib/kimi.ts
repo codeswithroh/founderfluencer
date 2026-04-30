@@ -200,7 +200,8 @@ function generateFallbackAnalysis(profile: any, tweets: any[]): FounderAnalysis 
 
 export async function analyzeFounder(
   profile: any,
-  tweets: any[]
+  tweets: any[],
+  seed?: string
 ): Promise<FounderAnalysis> {
   const userPrompt = `Analyze this Twitter user as a potential founder:
 

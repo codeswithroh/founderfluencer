@@ -58,7 +58,8 @@ function getRarityEmoji(rarity: string): string {
 
 export async function analyzeFounderWithIdeas(
   profile: any,
-  tweets: any[]
+  tweets: any[],
+  seed?: string
 ): Promise<FounderAnalysis> {
   const userPrompt = `Analyze this Twitter user as a potential founder:
 
@@ -86,6 +87,7 @@ Return ONLY JSON.`;
           { role: "user", content: userPrompt },
         ],
         temperature: 0.7,
+        seed: seed ? seed.split("").reduce((a, c) => a + c.charCodeAt(0), 0) : undefined,
         response_format: { type: "json_object" },
       }),
     });
