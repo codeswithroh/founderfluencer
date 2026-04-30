@@ -191,6 +191,10 @@ function generateFallbackAnalysis(profile: any, tweets: any[]): FounderAnalysis 
     rarity: `${rarityEmoji} ${rarity}`,
     vibe_check: vibe,
     investor_verdict: investorVerdict,
+    startup_ideas: [
+      { name: "AI-powered personal brand coach", description: "Helps founders optimize their online presence", why_it_fits: "Matches their communication strengths" },
+      { name: "Micro-SaaS for Twitter analytics", description: "Deep analytics for X power users", why_it_fits: "They already live on the platform" },
+    ],
   };
 }
 
@@ -256,6 +260,9 @@ Return ONLY JSON.`;
         rarity: rarity.includes(" ") ? rarity : `${rarityEmoji} ${rarity}`,
         vibe_check: parsed.vibe_check || "Chaotic Good",
         investor_verdict: parsed.investor_verdict || "Would schedule a call just to see what happens.",
+        startup_ideas: Array.isArray(parsed.startup_ideas) ? parsed.startup_ideas.slice(0, 3) : [
+          { name: "AI-powered personal brand coach", description: "Helps founders optimize their online presence", why_it_fits: "Matches their communication strengths" },
+        ],
       };
     } catch (e) {
       console.warn("Failed to parse kimi response, using fallback", e);
