@@ -48,11 +48,17 @@ export default function HomePage() {
                 FoundrProof
               </span>
             </div>
-            {/* Rage-bait words */}
-            <div className="hidden sm:flex items-center gap-8 text-[15px] font-medium text-stone-700">
-              <span>Grindset</span>
-              <span>Echo Chamber</span>
-              <span>Burnout</span>
+            {/* Nav links */}
+            <div className="hidden sm:flex items-center gap-6 text-[14px] font-medium text-stone-700">
+              <a href="https://x.com/codeswithroh" target="_blank" rel="noopener noreferrer" className="hover:text-stone-900 transition-colors">
+                Twitter
+              </a>
+              <a href="https://github.com/codeswithroh/founderfluencer" target="_blank" rel="noopener noreferrer" className="hover:text-stone-900 transition-colors">
+                GitHub
+              </a>
+              <a href="https://www.cofoundrs.fun/" target="_blank" rel="noopener noreferrer" className="hover:text-stone-900 transition-colors">
+                Cofoundr
+              </a>
             </div>
           </div>
         </header>
