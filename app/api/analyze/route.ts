@@ -77,9 +77,12 @@ export async function POST(req: NextRequest) {
     // ── All scrapers exhausted — return transparent error ─────────────────────
     if (!result) {
       console.error("[foundrproof] all layers failed:", layerLog);
+      const creditsGone = Object.values(layerLog).some((v) => v.includes("credits exhausted"));
       return NextResponse.json(
         {
-          error: "Could not fetch Twitter data. The account may be private or suspended.",
+          error: creditsGone
+            ? "twitterapi.io credits are exhausted — top up at twitterapi.io to restore full service."
+            : "Could not fetch Twitter data. The account may be private or suspended.",
           debug: layerLog,
         },
         { status: 404 }
