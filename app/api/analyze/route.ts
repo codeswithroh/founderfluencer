@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserInfo, getLastTweets } from "@/lib/twitter";
-import { analyzeFounderWithIdeas } from "@/lib/openrouter";
-import { AnalysisResult } from "@/types";
+import { getUserInfoSyndication, getLastTweetsSyndication } from "@/lib/twitter-syndication";
+import { analyzeFounderWithIdeas, analyzeFounderBlindMode } from "@/lib/openrouter";
+import { AnalysisResult, DataSource } from "@/types";
 
-// In-memory cache keyed by lowercase username
+// ─── In-memory cache keyed by lowercase username ─────────────────────────────
 const cache = new Map<string, AnalysisResult>();
 
 export async function POST(req: NextRequest) {
@@ -18,50 +19,78 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid username" }, { status: 400 });
     }
 
-    // Return cached result if we already analyzed this user
+    // ── Serve from cache if available ─────────────────────────────────────────
     const cached = cache.get(cleanUsername);
-    if (cached) {
-      return NextResponse.json(cached);
-    }
+    if (cached) return NextResponse.json(cached);
 
-    // Fetch profile — throws on auth/credit errors, returns null for genuine 404
-    let profile;
+    // ── Layer 1: twitterapi.io (primary, paid) ────────────────────────────────
+    let profile = null;
+    let tweets: Awaited<ReturnType<typeof getLastTweets>> = [];
+    let dataSource: DataSource = "live";
+
     try {
       profile = await getUserInfo(cleanUsername);
-    } catch (err: any) {
-      // Auth or credits problem — surface the real message, not a fake 404
-      console.error("getUserInfo error:", err.message);
-      return NextResponse.json({ error: err.message }, { status: 502 });
+      if (profile) {
+        try {
+          tweets = await getLastTweets(cleanUsername);
+        } catch (e: any) {
+          console.warn("twitterapi.io tweets failed, continuing without:", e.message);
+        }
+      }
+    } catch (primaryErr: any) {
+      console.warn("twitterapi.io unavailable, trying syndication fallback:", primaryErr.message);
     }
 
+    // ── Layer 2: Twitter Syndication API (free, no auth) ──────────────────────
     if (!profile) {
-      return NextResponse.json(
-        { error: "User not found or account is private" },
-        { status: 404 }
-      );
+      dataSource = "syndication";
+      try {
+        profile = await getUserInfoSyndication(cleanUsername);
+        if (profile) {
+          tweets = await getLastTweetsSyndication(cleanUsername);
+          console.info(`Syndication fallback succeeded for @${cleanUsername}`);
+        }
+      } catch (syndiErr: any) {
+        console.warn("Syndication fallback failed:", syndiErr.message);
+      }
     }
 
-    let tweets: Awaited<ReturnType<typeof getLastTweets>> = [];
-    try {
-      tweets = await getLastTweets(cleanUsername);
-    } catch (err: any) {
-      console.error("getLastTweets error:", err.message);
-      // Continue with empty tweets — the AI can still analyze the profile
+    // ── Layer 3: AI cold read (no external data) ──────────────────────────────
+    if (!profile) {
+      dataSource = "ai_only";
+      console.info(`All Twitter sources failed — running AI cold read for @${cleanUsername}`);
+
+      // Synthetic profile: enough for the UI to render (avatar shows initial, stats hidden)
+      profile = {
+        id: cleanUsername,
+        name: cleanUsername,
+        userName: cleanUsername,
+        followers: 0,
+        following: 0,
+        favouritesCount: 0,
+        statusesCount: 0,
+        isBlueVerified: false,
+        createdAt: new Date().toISOString(),
+        description: "",
+        profilePicture: "",
+        bannerPicture: "",
+        location: "",
+        url: `https://x.com/${cleanUsername}`,
+      };
+      tweets = [];
+
+      const analysis = await analyzeFounderBlindMode(cleanUsername);
+      const result: AnalysisResult = { profile, tweets, analysis, dataSource };
+      cache.set(cleanUsername, result);
+      return NextResponse.json(result);
     }
 
-    const enrichedProfile = { ...profile };
-    const analysis = await analyzeFounderWithIdeas(enrichedProfile, tweets, cleanUsername);
-
-    const result: AnalysisResult = {
-      profile: enrichedProfile,
-      tweets,
-      analysis,
-    };
-
-    // Cache the result forever
+    // ── Run AI analysis with whatever data we have ────────────────────────────
+    const analysis = await analyzeFounderWithIdeas({ ...profile }, tweets, cleanUsername);
+    const result: AnalysisResult = { profile, tweets, analysis, dataSource };
     cache.set(cleanUsername, result);
-
     return NextResponse.json(result);
+
   } catch (error: any) {
     console.error("Analyze error:", error);
     return NextResponse.json(

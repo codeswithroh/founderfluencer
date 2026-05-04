@@ -15,14 +15,14 @@ function getHeaders() {
 async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
   const headers = getHeaders();
   for (let attempt = 0; attempt < retries; attempt++) {
-    const res = await fetch(url, { headers, next: { revalidate: 60 } });
+    const res = await fetch(url, { headers, next: { revalidate: 60 } } as RequestInit);
     if (res.status !== 429) return res;
     // Exponential backoff: 1s, 2s, 4s
     await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
   }
   // Final attempt — return whatever we get
   const headers2 = getHeaders();
-  return fetch(url, { headers: headers2, next: { revalidate: 60 } });
+  return fetch(url, { headers: headers2, next: { revalidate: 60 } } as RequestInit);
 }
 
 async function parseErrorBody(res: Response): Promise<string> {

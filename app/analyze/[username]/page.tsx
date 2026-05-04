@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 
 const Tilt = dynamic(() => import("react-parallax-tilt"), { ssr: false });
-import { AnalysisResult } from "@/types";
+import { AnalysisResult, DataSource } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -364,6 +364,29 @@ export default function AnalyzePage() {
           </div>
         </header>
 
+        {/* Limited Analysis Banners */}
+        {data.dataSource === "syndication" && (
+          <div className="border-b border-yellow-500/20 bg-yellow-500/[0.07]">
+            <div className="mx-auto max-w-6xl px-6 py-2 flex items-center gap-2 text-yellow-400/80 text-sm">
+              <Zap className="h-3.5 w-3.5 shrink-0" />
+              <span>Powered by public tweet data — some stats may be approximate.</span>
+            </div>
+          </div>
+        )}
+        {data.dataSource === "ai_only" && (
+          <div className="border-b border-orange-500/20 bg-orange-500/[0.07]">
+            <div className="mx-auto max-w-6xl px-6 py-2 flex items-center gap-2 text-orange-400/80 text-sm">
+              <Brain className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                <strong className="text-orange-300/90">Limited Analysis</strong> — live Twitter data was unavailable.
+                This is an AI cold read based on your handle. Add a{" "}
+                <code className="text-orange-300/70 text-xs bg-orange-500/10 px-1 rounded">TWITTERAPI_IO_KEY</code>{" "}
+                for the full picture.
+              </span>
+            </div>
+          </div>
+        )}
+
         <main className="mx-auto max-w-6xl px-6 pt-16 pb-24">
           
           {/* Majestic Centered Profile Header */}
@@ -389,9 +412,18 @@ export default function AnalyzePage() {
              )}
              
              <div className="mt-8 flex flex-wrap justify-center gap-4 text-[15px] font-medium text-white/50">
-               <span className="flex items-center gap-2 bg-white/5 rounded-full px-5 py-2 border border-white/10"><Users className="h-4 w-4 text-[#c3f250]" /> {profile.followers.toLocaleString()} followers</span>
-               <span className="flex items-center gap-2 bg-white/5 rounded-full px-5 py-2 border border-white/10"><ArrowUpRight className="h-4 w-4 text-[#c3f250]" /> {profile.following.toLocaleString()} following</span>
+               {data.dataSource !== "ai_only" && (
+                 <>
+                   <span className="flex items-center gap-2 bg-white/5 rounded-full px-5 py-2 border border-white/10"><Users className="h-4 w-4 text-[#c3f250]" /> {profile.followers.toLocaleString()} followers</span>
+                   <span className="flex items-center gap-2 bg-white/5 rounded-full px-5 py-2 border border-white/10"><ArrowUpRight className="h-4 w-4 text-[#c3f250]" /> {profile.following.toLocaleString()} following</span>
+                 </>
+               )}
                {profile.location && <span className="flex items-center gap-2 bg-white/5 rounded-full px-5 py-2 border border-white/10"><Target className="h-4 w-4 text-[#c3f250]" /> {profile.location}</span>}
+               {data.dataSource === "ai_only" && (
+                 <span className="flex items-center gap-2 bg-orange-500/10 rounded-full px-5 py-2 border border-orange-500/20 text-orange-400/70 text-sm">
+                   <Brain className="h-4 w-4" /> AI Cold Read
+                 </span>
+               )}
              </div>
           </div>
 

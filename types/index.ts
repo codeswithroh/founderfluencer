@@ -47,8 +47,11 @@ export interface FounderAnalysis {
   startup_ideas: StartupIdea[];
 }
 
+export type DataSource = "live" | "syndication" | "ai_only";
+
 export interface AnalysisResult {
   profile: TwitterProfile;
   tweets: Tweet[];
   analysis: FounderAnalysis;
+  dataSource?: DataSource;
 }
