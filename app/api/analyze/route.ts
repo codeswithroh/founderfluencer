@@ -1,35 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserInfo, getLastTweets } from "@/lib/twitter";
-import { getUserInfoScrapingdog, getLastTweetsScrapingdog } from "@/lib/twitter-scrapingdog";
 import { getUserInfoSyndication, getLastTweetsSyndication } from "@/lib/twitter-syndication";
 import { analyzeFounderWithIdeas } from "@/lib/openrouter";
 import { AnalysisResult, DataSource } from "@/types";
 
 const cache = new Map<string, AnalysisResult>();
 
-type ProfileResult = Awaited<ReturnType<typeof getUserInfo>>;
-type TweetResult   = Awaited<ReturnType<typeof getLastTweets>>;
+// Collects what each layer tried and why it failed — returned in the error
+// response so you can diagnose without needing server logs.
+const layerLog: Record<string, string> = {};
 
 async function tryLayer(
   label: string,
-  getProfile: () => Promise<ProfileResult>,
-  getTweets:  (userName: string) => Promise<TweetResult>,
+  getProfile: () => Promise<any>,
+  getTweets: (u: string) => Promise<any[]>,
   userName: string
-): Promise<{ profile: ProfileResult; tweets: TweetResult } | null> {
+): Promise<{ profile: any; tweets: any[] } | null> {
   try {
     const profile = await getProfile();
-    if (!profile) return null;
-    let tweets: TweetResult = [];
-    try { tweets = await getTweets(userName); } catch {}
-    console.info(`[foundrproof] ${label} succeeded for @${userName}`);
+    if (!profile) {
+      layerLog[label] = "returned null (user not found or empty response)";
+      return null;
+    }
+    let tweets: any[] = [];
+    try {
+      tweets = await getTweets(userName);
+    } catch (tErr: any) {
+      layerLog[label + "_tweets"] = tErr.message;
+    }
+    layerLog[label] = "OK";
     return { profile, tweets };
   } catch (err: any) {
-    console.warn(`[foundrproof] ${label} failed:`, err.message);
+    layerLog[label] = err.message;
     return null;
   }
 }
 
 export async function POST(req: NextRequest) {
+  // Reset per-request log
+  Object.keys(layerLog).forEach((k) => delete layerLog[k]);
+
   try {
     const { username } = await req.json();
     if (!username || typeof username !== "string") {
@@ -53,21 +63,10 @@ export async function POST(req: NextRequest) {
     );
     let dataSource: DataSource = "live";
 
-    // ── Layer 2: Scrapingdog (only if SCRAPINGDOG_API_KEY is set) ─────────────
+    // ── Layer 2: Twitter Syndication API (free, no auth) ─────────────────────
     if (!result) {
       result = await tryLayer(
-        "Scrapingdog",
-        () => getUserInfoScrapingdog(clean),
-        (u) => getLastTweetsScrapingdog(u),
-        clean
-      );
-      dataSource = "syndication"; // reuse type — still real data
-    }
-
-    // ── Layer 3: Twitter Syndication (free, no auth) ──────────────────────────
-    if (!result) {
-      result = await tryLayer(
-        "Syndication",
+        "syndication",
         () => getUserInfoSyndication(clean),
         (u) => getLastTweetsSyndication(u),
         clean
@@ -75,19 +74,19 @@ export async function POST(req: NextRequest) {
       dataSource = "syndication";
     }
 
-    // ── All scrapers exhausted ────────────────────────────────────────────────
+    // ── All scrapers exhausted — return transparent error ─────────────────────
     if (!result) {
+      console.error("[foundrproof] all layers failed:", layerLog);
       return NextResponse.json(
         {
-          error:
-            "Could not fetch Twitter data. The account may be private, suspended, or all data sources are temporarily unavailable. Please try again shortly.",
+          error: "Could not fetch Twitter data. The account may be private or suspended.",
+          debug: layerLog,
         },
         { status: 404 }
       );
     }
 
     const { profile, tweets } = result;
-    if (!profile) throw new Error("Profile unexpectedly null");
     const analysis = await analyzeFounderWithIdeas({ ...profile }, tweets, clean);
     const final: AnalysisResult = { profile, tweets, analysis, dataSource };
     cache.set(clean, final);
