@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserInfo, getLastTweets, getUserAbout } from "@/lib/twitter";
+import { getUserInfo, getLastTweets } from "@/lib/twitter";
 import { analyzeFounderWithIdeas } from "@/lib/openrouter";
 import { AnalysisResult } from "@/types";
 
@@ -24,12 +24,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(cached);
     }
 
-    // Fetch profile and tweets in parallel
-    const [profile, tweets, about] = await Promise.all([
-      getUserInfo(cleanUsername),
-      getLastTweets(cleanUsername),
-      getUserAbout(cleanUsername),
-    ]);
+    // Fetch profile first, then tweets sequentially to avoid rate limiting
+    const profile = await getUserInfo(cleanUsername);
 
     if (!profile) {
       return NextResponse.json(
@@ -38,10 +34,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Merge about data into profile
-    const enrichedProfile = { ...profile, ...about };
+    const tweets = await getLastTweets(cleanUsername);
+    const enrichedProfile = { ...profile };
 
-    // Analyze with OpenRouter (seeded for determinism)
     const analysis = await analyzeFounderWithIdeas(enrichedProfile, tweets, cleanUsername);
 
     const result: AnalysisResult = {
