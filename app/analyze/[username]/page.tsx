@@ -248,6 +248,7 @@ export default function AnalyzePage() {
   const username = params.username as string;
   const [data, setData] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState("");
+  const [debugInfo, setDebugInfo] = useState<Record<string, string> | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -261,8 +262,12 @@ export default function AnalyzePage() {
       body: JSON.stringify({ username }),
     })
       .then(async (res) => {
-        if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Failed"); }
-        return res.json();
+        const json = await res.json();
+        if (!res.ok) {
+          if (json.debug) setDebugInfo(json.debug);
+          throw new Error(json.error || "Failed");
+        }
+        return json;
       })
       .then((result) => { setData(result); setLoading(false); })
       .catch((err) => { setError(err.message); setLoading(false); });
@@ -307,12 +312,22 @@ export default function AnalyzePage() {
 
   if (error) {
     return (
-      <div className="flex min-h-svh flex-col items-center justify-center gap-5 bg-[#111110] px-4">
+      <div className="flex min-h-svh flex-col items-center justify-center gap-5 bg-[#111110] px-4 max-w-lg mx-auto text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/20">
           <AlertCircle className="h-8 w-8 text-red-500" />
         </div>
         <h2 className="text-2xl font-serif text-white" style={{ fontFamily: "var(--font-serif)" }}>Something went wrong</h2>
         <p className="text-white/50 font-sans">{error}</p>
+        {debugInfo && (
+          <div className="w-full text-left rounded-xl border border-white/10 bg-white/5 p-4 text-xs font-mono space-y-1">
+            {Object.entries(debugInfo).map(([k, v]) => (
+              <div key={k}>
+                <span className="text-[#c3f250]/70">{k}:</span>{" "}
+                <span className="text-white/60 break-all">{v}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <Link href="/">
           <Button variant="outline" className="gap-2 rounded-xl border-white/10 text-white hover:bg-white/5 mt-4">
             <ArrowLeft className="h-4 w-4" /> Start Over
