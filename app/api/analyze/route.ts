@@ -24,8 +24,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(cached);
     }
 
-    // Fetch profile first, then tweets sequentially to avoid rate limiting
-    const profile = await getUserInfo(cleanUsername);
+    // Fetch profile — throws on auth/credit errors, returns null for genuine 404
+    let profile;
+    try {
+      profile = await getUserInfo(cleanUsername);
+    } catch (err: any) {
+      // Auth or credits problem — surface the real message, not a fake 404
+      console.error("getUserInfo error:", err.message);
+      return NextResponse.json({ error: err.message }, { status: 502 });
+    }
 
     if (!profile) {
       return NextResponse.json(
@@ -34,9 +41,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const tweets = await getLastTweets(cleanUsername);
-    const enrichedProfile = { ...profile };
+    let tweets: Awaited<ReturnType<typeof getLastTweets>> = [];
+    try {
+      tweets = await getLastTweets(cleanUsername);
+    } catch (err: any) {
+      console.error("getLastTweets error:", err.message);
+      // Continue with empty tweets — the AI can still analyze the profile
+    }
 
+    const enrichedProfile = { ...profile };
     const analysis = await analyzeFounderWithIdeas(enrichedProfile, tweets, cleanUsername);
 
     const result: AnalysisResult = {
