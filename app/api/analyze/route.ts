@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
       return { profile, tweets };
     });
 
-    // ── L2: twitterapi.io (fallback if TWITTERAPI_IO_KEY is set) ─────────────
-    if (!result && process.env.TWITTERAPI_IO_KEY) {
-      result = await tryLayer("twitterapi.io", async () => {
+    // ── L2: getxapi.com (fallback if GETXAPI_KEY is set) ────────────────────
+    if (!result && process.env.GETXAPI_KEY) {
+      result = await tryLayer("getxapi", async () => {
         const profile = await getUserInfo(clean);
         if (!profile) return null;
         const tweets = await getLastTweets(clean).catch(() => []);
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error: creditsGone
-            ? "API credits exhausted — top up at socialdata.tools to restore service."
+            ? "API credits exhausted — top up at socialdata.tools or getxapi.com to restore service."
             : "Could not fetch Twitter data. The account may be private or suspended.",
           debug: layerLog,
         },

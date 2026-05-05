@@ -1,11 +1,23 @@
+/**
+ * GetXAPI — Twitter/X data layer (L2 fallback)
+ *
+ * Endpoints:
+ *   Profile : GET https://api.getxapi.com/twitter/user/info?userName={username}
+ *   Tweets  : GET https://api.getxapi.com/twitter/user/tweets?userName={username}
+ *
+ * Auth: Authorization: Bearer {GETXAPI_KEY}
+ * Free: $0.1 credit at signup, no credit card — https://getxapi.com
+ * Cost: $0.001 per call after free credits
+ */
+
 import { TwitterProfile, Tweet } from "@/types";
 
-const BASE = "https://api.twitterapi.io";
+const BASE = "https://api.getxapi.com";
 
 function getHeaders(): Record<string, string> {
-  const key = process.env.TWITTERAPI_IO_KEY;
-  if (!key) throw new Error("TWITTERAPI_IO_KEY is not set in environment variables.");
-  return { "x-api-key": key };
+  const key = process.env.GETXAPI_KEY;
+  if (!key) throw new Error("GETXAPI_KEY is not set in environment variables.");
+  return { Authorization: `Bearer ${key}` };
 }
 
 async function apiFetch(url: string, retries = 3): Promise<Response> {
@@ -28,14 +40,16 @@ async function readError(res: Response): Promise<string> {
 }
 
 export async function getUserInfo(userName: string): Promise<TwitterProfile | null> {
-  const res = await apiFetch(`${BASE}/twitter/user/info?userName=${encodeURIComponent(userName)}`);
+  const res = await apiFetch(
+    `${BASE}/twitter/user/info?userName=${encodeURIComponent(userName)}`
+  );
 
-  if (res.status === 401 || res.status === 403) {
-    throw new Error(`twitterapi.io auth failed (${res.status}): ${await readError(res)} — check TWITTERAPI_IO_KEY`);
-  }
-  if (res.status === 402) throw new Error("twitterapi.io credits exhausted — top up at twitterapi.io");
+  if (res.status === 401 || res.status === 403)
+    throw new Error(`getxapi auth failed (${res.status}) — check GETXAPI_KEY`);
+  if (res.status === 402)
+    throw new Error("getxapi credits exhausted — top up at getxapi.com");
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`twitterapi.io error ${res.status}: ${await readError(res)}`);
+  if (!res.ok) throw new Error(`getxapi error ${res.status}: ${await readError(res)}`);
 
   const json = await res.json();
 
@@ -43,29 +57,28 @@ export async function getUserInfo(userName: string): Promise<TwitterProfile | nu
   if (json.status === "error" || json.status === "fail") {
     const msg: string = json.msg || json.message || "unknown error";
     if (/not found|does not exist|no user/i.test(msg)) return null;
-    throw new Error(`twitterapi.io: ${msg}`);
+    throw new Error(`getxapi: ${msg}`);
   }
 
-  // Handle both { data: { id } } and flat { id } responses
+  // GetXAPI returns flat response; guard against unexpected shapes
   const data = json.data ?? json;
   if (!data?.id) {
-    // Log the actual response shape to help debug future format changes
-    console.warn("[twitterapi.io] unexpected response shape:", JSON.stringify(json).slice(0, 300));
+    console.warn("[getxapi] unexpected response shape:", JSON.stringify(json).slice(0, 300));
     return null;
   }
 
   return {
-    id: data.id,
+    id: String(data.id),
     name: data.name,
     userName: data.userName,
-    followers: data.followers ?? data.followersCount ?? 0,
-    following: data.following ?? data.followingCount ?? 0,
-    favouritesCount: data.favouritesCount ?? data.likeCount ?? 0,
-    statusesCount: data.statusesCount ?? data.tweetCount ?? 0,
+    followers: data.followers ?? 0,
+    following: data.following ?? 0,
+    favouritesCount: data.favouritesCount ?? 0,
+    statusesCount: data.statusesCount ?? 0,
     isBlueVerified: data.isBlueVerified ?? false,
     createdAt: data.createdAt ?? "",
     description: data.description ?? "",
-    profilePicture: data.profilePicture ?? data.profileImageUrl ?? "",
+    profilePicture: data.profilePicture ?? "",
     bannerPicture: data.coverPicture ?? data.bannerPicture ?? "",
     location: data.location ?? "",
     url: data.url ?? `https://x.com/${data.userName}`,
@@ -74,18 +87,18 @@ export async function getUserInfo(userName: string): Promise<TwitterProfile | nu
 
 export async function getLastTweets(userName: string): Promise<Tweet[]> {
   const res = await apiFetch(
-    `${BASE}/twitter/user/last_tweets?userName=${encodeURIComponent(userName)}&includeReplies=false`
+    `${BASE}/twitter/user/tweets?userName=${encodeURIComponent(userName)}`
   );
 
   if (res.status === 401 || res.status === 403)
-    throw new Error(`twitterapi.io auth failed (${res.status})`);
-  if (res.status === 402) throw new Error("twitterapi.io credits exhausted");
+    throw new Error(`getxapi auth failed (${res.status})`);
+  if (res.status === 402) throw new Error("getxapi credits exhausted");
   if (!res.ok) return [];
 
   const json = await res.json();
   if (json.status === "error" || json.status === "fail") return [];
 
-  const tweets = json.data?.tweets ?? json.tweets ?? [];
+  const tweets: any[] = json.tweets ?? json.data?.tweets ?? [];
   return tweets.slice(0, 15).map((t: any) => ({
     id: t.id ?? "",
     text: t.text ?? "",
